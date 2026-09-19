@@ -5,6 +5,7 @@ __pycache__/
 .env
 
 data/raw/*
+!data/raw/structured_extraction_test.pdf
 data/extracted/*
 data/processed/*
 *.egg-info/
