@@ -7,6 +7,10 @@ name = "lumine-reader"
 version = "0.1.0"
 description = "A document-to-audiobook data processing pipeline."
 requires-python = ">=3.12"
+dependencies = [
+    "docling==2.129.0",
+    "edge-tts>=7.2,<8",
+]
 
 [tool.setuptools.packages.find]
 include = ["src*"]
