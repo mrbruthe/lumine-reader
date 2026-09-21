@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from enum import Enum
 
@@ -21,6 +22,16 @@ class SpeechUnit:
     type: SpeechUnitType
     text: str
     level: int | None = None
+
+
+def normalize_heading_for_speech(text: str) -> str:
+    """Add a natural speech boundary after hierarchical heading numbers."""
+
+    return re.sub(
+        r"^(\d+(?:\.\d+)+)\s+",
+        r"\1. ",
+        text,
+    )
 
 
 def render_document(document: StructuredDocument) -> tuple[SpeechUnit, ...]:
@@ -47,11 +58,11 @@ def render_document(document: StructuredDocument) -> tuple[SpeechUnit, ...]:
         if not text:
             continue
 
-        unit_type = (
-            SpeechUnitType.HEADING
-            if element.type == ElementType.HEADING
-            else SpeechUnitType.PARAGRAPH
-        )
+        if element.type == ElementType.HEADING:
+            text = normalize_heading_for_speech(text)
+            unit_type = SpeechUnitType.HEADING
+        else:
+            unit_type = SpeechUnitType.PARAGRAPH
 
         units.append(
             SpeechUnit(

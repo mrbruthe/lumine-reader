@@ -196,3 +196,28 @@ def test_split_oversized_text_preserves_content():
         len(part) <= 30
         for part in result
     )
+
+def test_heading_boundary_adds_spoken_pause():
+    units = (
+        SpeechUnit(
+            type=SpeechUnitType.HEADING,
+            text="LUMINE READER — STRUCTURED EXTRACTION TEST",
+            level=1,
+        ),
+        SpeechUnit(
+            type=SpeechUnitType.PARAGRAPH,
+            text="Repeated headers and standalone page numbers",
+        ),
+    )
+
+    result = chunk_speech_units(
+        units,
+        max_chars=200,
+    )
+
+    assert len(result) == 1
+
+    assert result[0].text == (
+        "LUMINE READER — STRUCTURED EXTRACTION TEST.\n\n"
+        "Repeated headers and standalone page numbers"
+    )

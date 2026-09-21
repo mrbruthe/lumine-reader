@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 
-from src.tts.render import SpeechUnit
+from src.tts.render import SpeechUnit, SpeechUnitType
 
 
 @dataclass(frozen=True)
@@ -9,6 +9,21 @@ class SpeechChunk:
     index: int
     units: tuple[SpeechUnit, ...]
     text: str
+
+
+def speech_text_for_unit(unit: SpeechUnit) -> str:
+    """Render a speech unit for TTS while preserving semantic boundaries."""
+
+    text = unit.text.strip()
+
+    if (
+        unit.type == SpeechUnitType.HEADING
+        and text
+        and text[-1] not in ".!?:;"
+    ):
+        return f"{text}."
+
+    return text
 
 
 def split_by_words(text: str, max_chars: int) -> tuple[str, ...]:
@@ -82,7 +97,12 @@ def split_oversized_text(
                 parts.append(current)
                 current = ""
 
-            parts.extend(split_by_words(sentence, max_chars))
+            parts.extend(
+                split_by_words(
+                    sentence,
+                    max_chars,
+                )
+            )
             continue
 
         candidate = f"{current} {sentence}".strip()
@@ -108,7 +128,9 @@ def chunk_speech_units(
     """Create bounded speech chunks while preserving semantic boundaries."""
 
     if max_chars <= 0:
-        raise ValueError("max_chars must be greater than zero")
+        raise ValueError(
+            "max_chars must be greater than zero"
+        )
 
     chunks: list[SpeechChunk] = []
 
@@ -133,7 +155,11 @@ def chunk_speech_units(
         current_texts.clear()
 
     for unit in units:
-        text = unit.text.strip()
+        # Convert the semantic unit into its TTS-facing form.
+        # Headings receive terminal punctuation when needed so
+        # the speech engine produces a reliable boundary before
+        # the following content.
+        text = speech_text_for_unit(unit)
 
         if not text:
             continue
@@ -142,7 +168,10 @@ def chunk_speech_units(
         if len(text) > max_chars:
             flush()
 
-            for part in split_oversized_text(text, max_chars):
+            for part in split_oversized_text(
+                text,
+                max_chars,
+            ):
                 split_unit = SpeechUnit(
                     type=unit.type,
                     text=part,
@@ -164,7 +193,10 @@ def chunk_speech_units(
             [*current_texts, text]
         )
 
-        if current_units and len(projected_text) > max_chars:
+        if (
+            current_units
+            and len(projected_text) > max_chars
+        ):
             flush()
 
         current_units.append(unit)
