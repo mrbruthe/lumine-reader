@@ -50,7 +50,7 @@ def test_render_document_preserves_reading_order():
         ),
         SpeechUnit(
             type=SpeechUnitType.TABLE,
-            text="Stage: Extract. Output: Structured document.",
+            text="Stage, Output. Extract: Structured document.",
         ),
         SpeechUnit(
             type=SpeechUnitType.PARAGRAPH,
@@ -77,3 +77,49 @@ def test_render_document_skips_empty_speech():
 
     assert len(result) == 1
     assert result[0].text == "Useful content."
+
+
+def test_numbered_heading_gets_natural_speech_pause():
+    document = StructuredDocument(
+        elements=(
+            DocumentElement(
+                type=ElementType.HEADING,
+                text="1.1 Wrapped and Hyphenated Text",
+                level=2,
+            ),
+        )
+    )
+
+    units = render_document(document)
+
+    assert units[0].text == (
+        "1.1. Wrapped and Hyphenated Text"
+    )
+
+
+def test_heading_preserves_complete_title_and_boundary():
+    document = StructuredDocument(
+        elements=(
+            DocumentElement(
+                type=ElementType.HEADING,
+                text="LUMINE READER — STRUCTURED EXTRACTION TEST",
+                level=1,
+            ),
+            DocumentElement(
+                type=ElementType.PARAGRAPH,
+                text="Repeated headers and standalone page numbers",
+            ),
+        )
+    )
+
+    units = render_document(document)
+
+    assert units[0].text == (
+        "LUMINE READER — STRUCTURED EXTRACTION TEST"
+    )
+    assert units[0].type == SpeechUnitType.HEADING
+
+    assert units[1].text == (
+        "Repeated headers and standalone page numbers"
+    )
+    assert units[1].type == SpeechUnitType.PARAGRAPH

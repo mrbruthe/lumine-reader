@@ -60,6 +60,7 @@ def test_normalize_for_tts():
         "Read more at"
     )
 
+
 def test_normalize_document_preserves_structure():
     from src.pipelines.document import (
         DocumentElement,
@@ -104,7 +105,8 @@ def test_normalize_document_preserves_structure():
 
     assert result.elements[2] == document.elements[2]
 
-def test_narrate_table_preserves_column_context():
+
+def test_narrate_table_uses_first_column_as_row_anchor():
     from src.pipelines.document import TableElement
     from src.tts.normalize import narrate_table
 
@@ -112,15 +114,51 @@ def test_narrate_table_preserves_column_context():
         rows=(
             ("Stage", "Input", "Output"),
             ("Extract", "PDF / EPUB / DOCX", "Structured document"),
+            ("Clean", "Extracted content", "Canonical content"),
             ("Validate", "Canonical content", "PASS / WARNING / FAIL"),
+            ("TTS Normalize", "Canonical content", "Speech-ready text"),
         )
     )
 
     result = narrate_table(table)
 
     assert result == (
-        "Stage: Extract. Input: PDF / EPUB / DOCX. "
-        "Output: Structured document. "
-        "Stage: Validate. Input: Canonical content. "
-        "Output: PASS / WARNING / FAIL."
+        "Stage, Input, Output. "
+        "Extract: PDF / EPUB / DOCX; Structured document. "
+        "Clean: Extracted content; Canonical content. "
+        "Validate: Canonical content; PASS / WARNING / FAIL. "
+        "TTS Normalize: Canonical content; Speech-ready text."
+    )
+
+
+def test_url_removal_removes_dangling_visit_phrase():
+    text = (
+        "Read the Lumine documentation or visit "
+        "https://example.com/very/long/path?chapter=1. Revenue"
+    )
+
+    result = normalize_for_tts(text)
+
+    assert result == (
+        "Read the Lumine documentation. Revenue"
+    )
+
+
+def test_squared_expression_is_spoken_naturally():
+    text = "x² + y² = z²."
+
+    result = normalize_for_tts(text)
+
+    assert result == (
+        "x squared plus y squared equals z squared."
+    )
+
+
+def test_cubed_expression_is_spoken_naturally():
+    text = "x³ + y³ = z³."
+
+    result = normalize_for_tts(text)
+
+    assert result == (
+        "x cubed plus y cubed equals z cubed."
     )
