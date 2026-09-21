@@ -9,3 +9,4 @@ data/raw/*
 data/extracted/*
 data/processed/*
 *.egg-info/
+data/audio/
