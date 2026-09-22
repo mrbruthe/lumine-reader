@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "docling==2.129.0",
     "edge-tts>=7.2,<8",
+    "psycopg[binary]>=3.3,<4",
 ]
 
 [tool.setuptools.packages.find]
@@ -18,10 +19,11 @@ include = ["src*"]
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4",
+    "pytest-asyncio>=1.2,<2",
 ]
 
 [tool.pytest.ini_options]
 markers = [
     "integration: tests that use real external processing components",
 ]
-addopts = "-m 'not integration'" 
+addopts = "-m 'not integration'"
