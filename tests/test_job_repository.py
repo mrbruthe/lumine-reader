@@ -1,7 +1,12 @@
 import psycopg
 import pytest
 
-from src.database.job_repository import create_job, get_job
+from src.database.job_repository import (
+    create_job,
+    get_job,
+    update_job_status,
+)
+
 from src.database.jobs import JobStatus
 
 
@@ -76,6 +81,69 @@ def test_get_job_returns_none_when_job_does_not_exist(db_connection):
     job = get_job(
         connection=db_connection,
         job_id="missing-job",
+    )
+
+    assert job is None
+
+def test_update_job_status_to_processing(db_connection):
+    create_job(
+        connection=db_connection,
+        job_id="test-job-001",
+        source_path="data/raw/book.pdf",
+    )
+
+    job = update_job_status(
+        connection=db_connection,
+        job_id="test-job-001",
+        status=JobStatus.PROCESSING,
+    )
+
+    assert job is not None
+    assert job.status == JobStatus.PROCESSING
+
+
+def test_update_job_status_to_completed(db_connection):
+    create_job(
+        connection=db_connection,
+        job_id="test-job-001",
+        source_path="data/raw/book.pdf",
+    )
+
+    job = update_job_status(
+        connection=db_connection,
+        job_id="test-job-001",
+        status=JobStatus.COMPLETED,
+        output_path="data/jobs/test-job-001/final.mp3",
+    )
+
+    assert job is not None
+    assert job.status == JobStatus.COMPLETED
+    assert job.output_path == "data/jobs/test-job-001/final.mp3"
+
+
+def test_update_job_status_to_failed(db_connection):
+    create_job(
+        connection=db_connection,
+        job_id="test-job-001",
+        source_path="data/raw/book.pdf",
+    )
+
+    job = update_job_status(
+        connection=db_connection,
+        job_id="test-job-001",
+        status=JobStatus.FAILED,
+        error_message="TTS generation failed",
+    )
+
+    assert job is not None
+    assert job.status == JobStatus.FAILED
+    assert job.error_message == "TTS generation failed"
+
+def test_update_job_status_returns_none_when_job_does_not_exist(db_connection):
+    job = update_job_status(
+        connection=db_connection,
+        job_id="missing-job",
+        status=JobStatus.PROCESSING,
     )
 
     assert job is None

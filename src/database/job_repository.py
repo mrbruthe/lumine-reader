@@ -89,3 +89,57 @@ def get_job(
         error_message=row["error_message"],
         output_path=row["output_path"],
     )
+
+def update_job_status(
+    connection: psycopg.Connection[Any],
+    job_id: str,
+    status: JobStatus,
+    *,
+    error_message: str | None = None,
+    output_path: str | None = None,
+) -> Job | None:
+    """Update the state of an existing processing job."""
+
+    with connection.cursor(row_factory=dict_row) as cursor:
+        cursor.execute(
+            """
+            UPDATE jobs
+            SET
+                status = %s,
+                updated_at = NOW(),
+                error_message = %s,
+                output_path = %s
+            WHERE id = %s
+            RETURNING
+                id,
+                source_path,
+                status,
+                created_at,
+                updated_at,
+                error_message,
+                output_path
+            """,
+            (
+                status.value,
+                error_message,
+                output_path,
+                job_id,
+            ),
+        )
+
+        row = cursor.fetchone()
+
+    if row is None:
+        return None
+
+    connection.commit()
+
+    return Job(
+        id=row["id"],
+        source_path=row["source_path"],
+        status=JobStatus(row["status"]),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        error_message=row["error_message"],
+        output_path=row["output_path"],
+    )
