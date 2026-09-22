@@ -3,6 +3,7 @@ from typing import Any
 
 import psycopg
 
+from src.database.event_repository import create_processing_event
 from src.database.job_repository import update_job_status
 from src.database.jobs import JobStatus
 from src.pipelines.audiobook import AudiobookResult, build_audiobook
@@ -30,6 +31,12 @@ async def run_audiobook_job(
     if job is None:
         raise ValueError(f"Job does not exist: {job_id}")
 
+    create_processing_event(
+        connection=connection,
+        job_id=job_id,
+        event_type="processing_started",
+        message="Audiobook processing started",
+    )
 
     try:
         result = await build_audiobook(
@@ -47,6 +54,14 @@ async def run_audiobook_job(
             status=JobStatus.FAILED,
             error_message=str(exc),
         )
+
+        create_processing_event(
+            connection=connection,
+            job_id=job_id,
+            event_type="processing_failed",
+            message=str(exc),
+        )
+
         raise
 
     update_job_status(
@@ -54,6 +69,13 @@ async def run_audiobook_job(
         job_id=job_id,
         status=JobStatus.COMPLETED,
         output_path=str(result.output_path),
+    )
+
+    create_processing_event(
+        connection=connection,
+        job_id=job_id,
+        event_type="processing_completed",
+        message="Audiobook processing completed",
     )
 
     return result

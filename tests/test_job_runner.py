@@ -1,29 +1,38 @@
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 
-from src.database.jobs import JobStatus
+from src.database.jobs import Job, JobStatus
 from src.pipelines.audiobook import AudiobookResult
 from src.pipelines.job_runner import run_audiobook_job
 
 
 @pytest.mark.asyncio
-async def test_run_audiobook_job_marks_job_completed():
+async def test_run_audiobook_job_completes():
     connection = Mock()
+
+    processing_job = Mock(spec=Job)
 
     result = AudiobookResult(
         metadata=Mock(),
         output_path=Path("data/jobs/job-001/final.mp3"),
-        chunk_paths=(Path("data/jobs/job-001/audio/chunk_0000.mp3"),),
+        chunk_paths=(),
     )
 
     with (
         patch(
+            "src.pipelines.job_runner.update_job_status",
+            side_effect=[processing_job, Mock(spec=Job)],
+        ) as update_status,
+        patch(
+            "src.pipelines.job_runner.create_processing_event"
+        ) as create_event,
+        patch(
             "src.pipelines.job_runner.build_audiobook",
-            new=AsyncMock(return_value=result),
-        ),
-        patch("src.pipelines.job_runner.update_job_status") as update_status,
+            new_callable=AsyncMock,
+            return_value=result,
+        ) as build,
     ):
         returned = await run_audiobook_job(
             connection=connection,
@@ -34,34 +43,59 @@ async def test_run_audiobook_job_marks_job_completed():
 
     assert returned == result
 
-    assert update_status.call_count == 2
+    build.assert_awaited_once()
 
-    assert update_status.call_args_list[0].kwargs == {
-        "connection": connection,
-        "job_id": "job-001",
-        "status": JobStatus.PROCESSING,
-    }
+    assert update_status.call_args_list == [
+        call(
+            connection=connection,
+            job_id="job-001",
+            status=JobStatus.PROCESSING,
+        ),
+        call(
+            connection=connection,
+            job_id="job-001",
+            status=JobStatus.COMPLETED,
+            output_path="data/jobs/job-001/final.mp3",
+        ),
+    ]
 
-    assert update_status.call_args_list[1].kwargs == {
-        "connection": connection,
-        "job_id": "job-001",
-        "status": JobStatus.COMPLETED,
-        "output_path": "data/jobs/job-001/final.mp3",
-    }
+    assert create_event.call_args_list == [
+        call(
+            connection=connection,
+            job_id="job-001",
+            event_type="processing_started",
+            message="Audiobook processing started",
+        ),
+        call(
+            connection=connection,
+            job_id="job-001",
+            event_type="processing_completed",
+            message="Audiobook processing completed",
+        ),
+    ]
 
 
 @pytest.mark.asyncio
-async def test_run_audiobook_job_marks_job_failed():
+async def test_run_audiobook_job_marks_failure():
     connection = Mock()
+
+    processing_job = Mock(spec=Job)
 
     with (
         patch(
+            "src.pipelines.job_runner.update_job_status",
+            side_effect=[processing_job, Mock(spec=Job)],
+        ) as update_status,
+        patch(
+            "src.pipelines.job_runner.create_processing_event"
+        ) as create_event,
+        patch(
             "src.pipelines.job_runner.build_audiobook",
-            new=AsyncMock(side_effect=RuntimeError("TTS generation failed")),
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("TTS failed"),
         ),
-        patch("src.pipelines.job_runner.update_job_status") as update_status,
     ):
-        with pytest.raises(RuntimeError, match="TTS generation failed"):
+        with pytest.raises(RuntimeError, match="TTS failed"):
             await run_audiobook_job(
                 connection=connection,
                 job_id="job-001",
@@ -69,20 +103,35 @@ async def test_run_audiobook_job_marks_job_failed():
                 output_dir="data/jobs/job-001",
             )
 
-    assert update_status.call_count == 2
+    assert update_status.call_args_list == [
+        call(
+            connection=connection,
+            job_id="job-001",
+            status=JobStatus.PROCESSING,
+        ),
+        call(
+            connection=connection,
+            job_id="job-001",
+            status=JobStatus.FAILED,
+            error_message="TTS failed",
+        ),
+    ]
 
-    assert update_status.call_args_list[0].kwargs == {
-        "connection": connection,
-        "job_id": "job-001",
-        "status": JobStatus.PROCESSING,
-    }
+    assert create_event.call_args_list == [
+        call(
+            connection=connection,
+            job_id="job-001",
+            event_type="processing_started",
+            message="Audiobook processing started",
+        ),
+        call(
+            connection=connection,
+            job_id="job-001",
+            event_type="processing_failed",
+            message="TTS failed",
+        ),
+    ]
 
-    assert update_status.call_args_list[1].kwargs == {
-        "connection": connection,
-        "job_id": "job-001",
-        "status": JobStatus.FAILED,
-        "error_message": "TTS generation failed",
-    }
 
 @pytest.mark.asyncio
 async def test_run_audiobook_job_rejects_missing_job():
@@ -94,11 +143,17 @@ async def test_run_audiobook_job_rejects_missing_job():
             return_value=None,
         ),
         patch(
+            "src.pipelines.job_runner.create_processing_event"
+        ) as create_event,
+        patch(
             "src.pipelines.job_runner.build_audiobook",
-            new=AsyncMock(),
-        ) as build_audiobook,
+            new_callable=AsyncMock,
+        ) as build,
     ):
-        with pytest.raises(ValueError, match="Job does not exist: missing-job"):
+        with pytest.raises(
+            ValueError,
+            match="Job does not exist: missing-job",
+        ):
             await run_audiobook_job(
                 connection=connection,
                 job_id="missing-job",
@@ -106,4 +161,5 @@ async def test_run_audiobook_job_rejects_missing_job():
                 output_dir="data/jobs/missing-job",
             )
 
-    build_audiobook.assert_not_awaited()
+    build.assert_not_awaited()
+    create_event.assert_not_called()
